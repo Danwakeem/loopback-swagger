@@ -28,7 +28,7 @@ describe('route-helper', function() {
         {name: 'unknownModel', type: 'UnknownModel'},
         {name: 'requiredStr', type: String, required: true},
       ],
-    });
+    }, null, {name: TestModel.definition.name, definition: TestModel.definition});
     var responseMessage = getResponseMessage(entry.operation);
     (((responseMessage || {}).schema || {}).required || []).sort(); // sort the array for the comparison below
     expect(responseMessage)
@@ -46,25 +46,25 @@ describe('route-helper', function() {
             type: 'array',
           },
           testModel: {
-            type: 'object', // TODO - emit '$ref': '#/definitions/TestModel' after registering it
+            $ref: '#/definitions/TestModel',
           },
           testModelArray: {
             items: {
-              type: 'object', // TODO - emit '$ref': '#/definitions/TestModel' after registering it
+              $ref: '#/definitions/TestModel',
             },
             type: 'array',
           },
           testModelArrayArray: {
             items: {
               items: {
-                type: 'object', // TODO - emit '$ref': '#/definitions/TestModel' after registering it
+                $ref: '#/definitions/TestModel',
               },
               type: 'array',
             },
             type: 'array',
           },
           testModelStr: {
-            type: 'object', // TODO - emit '$ref': '#/definitions/TestModel' after registering it
+            $ref: '#/definitions/TestModel',
           },
           unknownModel: {
             type: 'object', // unknown model is converted to plain object
@@ -181,7 +181,7 @@ describe('route-helper', function() {
     expect(paramDoc).to.have.property('name', 'id');
   });
 
-  it('correctly converts return types (arrays)', function() {
+  it('correctly converts root return types (arrays)', function() {
     var doc = createAPIDoc({
       returns: [
         {arg: 'data', type: ['customType'], root: true},
@@ -193,6 +193,54 @@ describe('route-helper', function() {
     expect(responseSchema).to.have.property('type', 'array');
     expect(responseSchema).to.have.property('items')
       .eql({$ref: '#/definitions/customType'});
+  });
+
+  it('correctly converts non root return types (arrays)', function() {
+    var doc = createAPIDoc({
+      returns: [
+        {arg: 'data', type: ['customType']},
+      ],
+    });
+    var opDoc = doc.operation;
+
+    var responseSchema = getResponseMessage(opDoc).schema;
+    expect(responseSchema)
+      .to.eql({
+        type: 'object',
+        properties: {
+          data: {
+            type: 'array',
+            items: {
+              type: 'object',
+            },
+          },
+        },
+      });
+  });
+
+  it('correctly converts registered non root return types', function() {
+    var customType = loopback.createModel('customType', {foo: String});
+    var doc = createAPIDoc({
+      returns: [
+        {arg: 'data', type: ['customType']},
+      ],
+    }, null,
+    {name: customType.definition.name, definition: customType.definition});
+    var opDoc = doc.operation;
+
+    var responseSchema = getResponseMessage(opDoc).schema;
+    expect(responseSchema)
+      .to.eql({
+        type: 'object',
+        properties: {
+          data: {
+            type: 'array',
+            items: {
+              $ref: '#/definitions/customType',
+            },
+          },
+        },
+      });
   });
 
   it('correctly converts return types (format)', function() {
@@ -484,12 +532,15 @@ describe('route-helper', function() {
 });
 
 // Easy wrapper around createRoute
-function createAPIDoc(def, classDef) {
+function createAPIDoc(def, classDef, type) {
+  var typeRegistry = new TypeRegistry();
+  if (type) typeRegistry.registerLoopbackType(type.name, type.definition);
+
   return routeHelper.routeToPathEntry(_defaults(def || {}, {
     path: '/test',
     verb: 'GET',
     method: 'test.get',
-  }), classDef, new TypeRegistry(), Object.create(null));
+  }), classDef, typeRegistry, Object.create(null));
 }
 
 function getResponseMessage(operationDoc) {
