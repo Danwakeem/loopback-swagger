@@ -233,9 +233,7 @@ describe('route-helper', function() {
           type: ['customType'],
         },
       ],
-    },
-    null,
-    typeRegistry);
+    }, null, typeRegistry);
     var opDoc = doc.operation;
 
     var responseSchema = getResponseMessage(opDoc).schema;
