@@ -14,6 +14,8 @@ var loopback = require('loopback');
 describe('route-helper', function() {
   it('returns "object" when a route has multiple return values', function() {
     var TestModel = loopback.createModel('TestModel', {street: String});
+    var typeRegistry = new TypeRegistry();
+    typeRegistry.registerLoopbackType(TestModel.definition.name, TestModel.definition);
     var entry = createAPIDoc({
       returns: [
         {arg: 'max', type: 'number'},
@@ -28,7 +30,9 @@ describe('route-helper', function() {
         {name: 'unknownModel', type: 'UnknownModel'},
         {name: 'requiredStr', type: String, required: true},
       ],
-    }, null, {name: TestModel.definition.name, definition: TestModel.definition});
+    },
+    null,
+    typeRegistry);
     var responseMessage = getResponseMessage(entry.operation);
     (((responseMessage || {}).schema || {}).required || []).sort(); // sort the array for the comparison below
     expect(responseMessage)
@@ -220,12 +224,18 @@ describe('route-helper', function() {
 
   it('correctly converts registered non root return types', function() {
     var customType = loopback.createModel('customType', {foo: String});
+    var typeRegistry = new TypeRegistry();
+    typeRegistry.registerLoopbackType(customType.definition.name, customType.definition);
     var doc = createAPIDoc({
       returns: [
-        {arg: 'data', type: ['customType']},
+        {
+          arg: 'data',
+          type: ['customType'],
+        },
       ],
-    }, null,
-    {name: customType.definition.name, definition: customType.definition});
+    },
+    null,
+    typeRegistry);
     var opDoc = doc.operation;
 
     var responseSchema = getResponseMessage(opDoc).schema;
@@ -532,9 +542,8 @@ describe('route-helper', function() {
 });
 
 // Easy wrapper around createRoute
-function createAPIDoc(def, classDef, type) {
-  var typeRegistry = new TypeRegistry();
-  if (type) typeRegistry.registerLoopbackType(type.name, type.definition);
+function createAPIDoc(def, classDef, typeRegistry) {
+  if (!typeRegistry) typeRegistry = new TypeRegistry();
 
   return routeHelper.routeToPathEntry(_defaults(def || {}, {
     path: '/test',
